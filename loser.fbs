@@ -1,0 +1,30 @@
+namespace User1;
+
+table login{
+	name: string;
+	roll: string;
+	password: string;
+}
+
+table logins{
+	logs: [login];
+}
+
+
+rpc_service mate{
+	hello(logins): login;
+	bye(logins): login;
+}
+
+namespace User2;
+
+
+
+table lol{
+	id:int;
+}
+
+
+rpc_service mate{
+	yo(lol):lol;
+}

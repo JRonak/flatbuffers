@@ -19,13 +19,14 @@
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
-
+#include <iostream>
 #include "src/compiler/cpp_generator.h"
 
 namespace flatbuffers {
 
+namespace grpc_cpp {
 class FlatBufMethod : public grpc_generator::Method {
- public:
+public:
   enum Streaming { kNone, kClient, kServer, kBiDi };
 
   FlatBufMethod(const RPCCall *method)
@@ -39,7 +40,10 @@ class FlatBufMethod : public grpc_generator::Method {
     }
   }
 
-  std::string name() const { return method_->name; }
+  std::string name() const {
+    std::cout << method_->name << "\n";
+    return method_->name;
+  }
 
   std::string GRPCType(const StructDef &sd) const {
     return "flatbuffers::BufferRef<" + sd.name + ">";
@@ -57,13 +61,13 @@ class FlatBufMethod : public grpc_generator::Method {
   bool ServerOnlyStreaming() const { return streaming_ == kServer; }
   bool BidiStreaming() const { return streaming_ == kBiDi; }
 
- private:
+private:
   const RPCCall *method_;
   Streaming streaming_;
 };
 
 class FlatBufService : public grpc_generator::Service {
- public:
+public:
   FlatBufService(const ServiceDef *service) : service_(service) {}
 
   std::string name() const { return service_->name; }
@@ -74,15 +78,15 @@ class FlatBufService : public grpc_generator::Service {
 
   std::unique_ptr<const grpc_generator::Method> method(int i) const {
     return std::unique_ptr<const grpc_generator::Method>(
-          new FlatBufMethod(service_->calls.vec[i]));
+             new FlatBufMethod(service_->calls.vec[i]));
   };
 
- private:
+private:
   const ServiceDef *service_;
 };
 
 class FlatBufPrinter : public grpc_generator::Printer {
- public:
+public:
   FlatBufPrinter(std::string *str)
     : str_(str), escape_char_('$'), indent_(0) {}
 
@@ -127,19 +131,22 @@ class FlatBufPrinter : public grpc_generator::Printer {
   void Indent() { indent_++; }
   void Outdent() { indent_--; assert(indent_ >= 0); }
 
- private:
+private:
   std::string *str_;
   char escape_char_;
   int indent_;
 };
 
 class FlatBufFile : public grpc_generator::File {
- public:
+public:
   FlatBufFile(const Parser &parser, const std::string &file_name)
     : parser_(parser), file_name_(file_name) {}
   FlatBufFile &operator=(const FlatBufFile &);
 
-  std::string filename() const { return file_name_; }
+  std::string filename() const {
+    std::cout << "filename=" << file_name_ << "\n";
+    return file_name_;
+  }
   std::string filename_without_ext() const {
     return StripExtension(file_name_);
   }
@@ -148,10 +155,15 @@ class FlatBufFile : public grpc_generator::File {
   std::string service_header_ext() const { return ".grpc.fb.h"; }
 
   std::string package() const {
+    std::cout << "package=" << StripExtension(parser_.namespaces_.back()->GetFullyQualifiedName(""))
+              << "\n";
     return parser_.namespaces_.back()->GetFullyQualifiedName("");
   }
 
   std::vector<std::string> package_parts() const {
+    auto &x = parser_.namespaces_.back()->components;
+    for (auto i = x.begin(); i != x.end(); i++)
+      std::cout << "components:" << *i << "\n";
     return parser_.namespaces_.back()->components;
   }
 
@@ -165,18 +177,182 @@ class FlatBufFile : public grpc_generator::File {
 
   std::unique_ptr<const grpc_generator::Service> service(int i) const {
     return std::unique_ptr<const grpc_generator::Service> (
-          new FlatBufService(parser_.services_.vec[i]));
+             new FlatBufService(parser_.services_.vec[i]));
   }
 
   std::unique_ptr<grpc_generator::Printer> CreatePrinter(std::string *str) const {
     return std::unique_ptr<grpc_generator::Printer>(
-          new FlatBufPrinter(str));
+             new FlatBufPrinter(str));
   }
 
- private:
+private:
   const Parser &parser_;
   const std::string &file_name_;
 };
+}// namespace grpc_cpp
+
+namespace grpc_go {
+
+class FlatBufMethod : public grpc_generator::Method {
+public:
+  enum Streaming { kNone, kClient, kServer, kBiDi };
+
+  FlatBufMethod(const RPCCall *method)
+    : method_(method) {
+    streaming_ = kNone;
+    auto val = method_->attributes.Lookup("streaming");
+    if (val) {
+      if (val->constant == "client") streaming_ = kClient;
+      if (val->constant == "server") streaming_ = kServer;
+      if (val->constant == "bidi") streaming_ = kBiDi;
+    }
+  }
+
+  std::string name() const {
+    return method_->name;
+  }
+
+  std::string GRPCType(const StructDef &sd) const {
+    return sd.name;
+  }
+
+  std::string input_type_name() const {
+    return GRPCType(*method_->request);
+  }
+  std::string output_type_name() const {
+    return GRPCType(*method_->response);
+  }
+
+  bool NoStreaming() const { return streaming_ == kNone; }
+  bool ClientOnlyStreaming() const { return streaming_ == kClient; }
+  bool ServerOnlyStreaming() const { return streaming_ == kServer; }
+  bool BidiStreaming() const { return streaming_ == kBiDi; }
+
+private:
+  const RPCCall *method_;
+  Streaming streaming_;
+};
+
+class FlatBufService : public grpc_generator::Service {
+public:
+  FlatBufService(const ServiceDef *service) : service_(service) {}
+
+  std::string name() const { return service_->name; }
+
+  int method_count() const {
+    return static_cast<int>(service_->calls.vec.size());
+  };
+
+  std::unique_ptr<const grpc_generator::Method> method(int i) const {
+    return std::unique_ptr<const grpc_generator::Method>(
+             new FlatBufMethod(service_->calls.vec[i]));
+  };
+
+private:
+  const ServiceDef *service_;
+};
+
+class FlatBufPrinter : public grpc_generator::Printer {
+public:
+  FlatBufPrinter(std::string *str)
+    : str_(str), escape_char_('$'), indent_(0) {}
+
+  void Print(const std::map<std::string, std::string> &vars,
+             const char *string_template) {
+    std::string s = string_template;
+    // Replace any occurrences of strings in "vars" that are surrounded
+    // by the escape character by what they're mapped to.
+    size_t pos;
+    while ((pos = s.find(escape_char_)) != std::string::npos) {
+      // Found an escape char, must also find the closing one.
+      size_t pos2 = s.find(escape_char_, pos + 1);
+      // If placeholder not closed, ignore.
+      if (pos2 == std::string::npos) break;
+      auto it = vars.find(s.substr(pos + 1, pos2 - pos - 1));
+      // If unknown placeholder, ignore.
+      if (it == vars.end()) break;
+      // Subtitute placeholder.
+      s.replace(pos, pos2 - pos + 1, it->second);
+    }
+    Print(s.c_str());
+  }
+
+  void Print(const char *s) {
+    // Add this string, but for each part separated by \n, add indentation.
+    for (;;) {
+      // Current indentation.
+      str_->insert(str_->end(), indent_ * 2, ' ');
+      // See if this contains more than one line.
+      const char * lf = strchr(s, '\n');
+      if (lf) {
+        (*str_) += std::string(s, lf + 1);
+        s = lf + 1;
+        if (!*s) break;  // Only continue if there's more lines.
+      } else {
+        (*str_) += s;
+        break;
+      }
+    }
+  }
+
+  void Indent() { indent_++; }
+  void Outdent() { indent_--; assert(indent_ >= 0); }
+
+private:
+  std::string *str_;
+  char escape_char_;
+  int indent_;
+};
+
+class FlatBufFile : public grpc_generator::File {
+public:
+  FlatBufFile(const Parser &parser, const std::string &file_name)
+    : parser_(parser), file_name_(file_name) {}
+  FlatBufFile &operator=(const FlatBufFile &);
+
+  std::string filename() const {
+    return file_name_;
+  }
+  std::string filename_without_ext() const {
+    return StripExtension(file_name_);
+  }
+
+  std::string package() const {
+    return StripExtension(parser_.namespaces_.back()->GetFullyQualifiedName(""));
+  }
+
+  std::vector<std::string> package_parts() const {
+    return parser_.namespaces_.back()->components;
+  }
+
+  //un-used
+  std::string additional_headers() const {
+    return "";
+  }
+
+  //un-used
+  std::string message_header_ext() const { return ""; }
+  std::string service_header_ext() const { return ""; }
+
+  int service_count() const {
+    return static_cast<int>(parser_.services_.vec.size());
+  };
+
+  std::unique_ptr<const grpc_generator::Service> service(int i) const {
+    return std::unique_ptr<const grpc_generator::Service> (
+             new FlatBufService(parser_.services_.vec[i]));
+  }
+
+  std::unique_ptr<grpc_generator::Printer> CreatePrinter(std::string *str) const {
+    return std::unique_ptr<grpc_generator::Printer>(
+             new FlatBufPrinter(str));
+  }
+
+private:
+  const Parser &parser_;
+  const std::string &file_name_;
+};
+}//namespace grpc_go
 
 bool GenerateGRPC(const Parser &parser,
                   const std::string &/*path*/,
@@ -193,19 +369,18 @@ bool GenerateGRPC(const Parser &parser,
   // TODO(wvo): make the other parameters in this struct configurable.
   generator_parameters.use_system_headers = true;
 
-  FlatBufFile fbfile(parser, file_name);
-
+  grpc_cpp::FlatBufFile fbfile(parser, file_name);
   std::string header_code =
-      grpc_cpp_generator::GetHeaderPrologue(&fbfile, generator_parameters) +
-      grpc_cpp_generator::GetHeaderIncludes(&fbfile, generator_parameters) +
-      grpc_cpp_generator::GetHeaderServices(&fbfile, generator_parameters) +
-      grpc_cpp_generator::GetHeaderEpilogue(&fbfile, generator_parameters);
+    grpc_cpp_generator::GetHeaderPrologue(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetHeaderIncludes(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetHeaderServices(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetHeaderEpilogue(&fbfile, generator_parameters);
 
   std::string source_code =
-      grpc_cpp_generator::GetSourcePrologue(&fbfile, generator_parameters) +
-      grpc_cpp_generator::GetSourceIncludes(&fbfile, generator_parameters) +
-      grpc_cpp_generator::GetSourceServices(&fbfile, generator_parameters) +
-      grpc_cpp_generator::GetSourceEpilogue(&fbfile, generator_parameters);
+    grpc_cpp_generator::GetSourcePrologue(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetSourceIncludes(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetSourceServices(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetSourceEpilogue(&fbfile, generator_parameters);
 
   return flatbuffers::SaveFile((file_name + ".grpc.fb.h").c_str(),
                                header_code, false) &&
