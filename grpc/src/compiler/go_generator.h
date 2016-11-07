@@ -42,8 +42,16 @@
 
 namespace grpc_go_generator {
 
-// Return the source of the generated service file. 
-grpc::string GenerateServiceSource(grpc_generator::File *file, grpc_generator::Service *service);
+struct Codec {
+	// Puts the custom Codec name in the Methods
+	grpc::string name;
+
+	// Puts the custom Codec source in the generated source
+	grpc::string source;
+};
+
+// Return the source of the generated service file.
+grpc::string GenerateServiceSource(grpc_generator::File *file, Codec *codec);
 
 }
 

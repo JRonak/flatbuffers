@@ -14,64 +14,42 @@
 #include <grpc++/impl/codegen/rpc_service_method.h>
 #include <grpc++/impl/codegen/service_type.h>
 #include <grpc++/impl/codegen/sync_stream.h>
-namespace User2 {
+namespace helloworld {
 
-static const char* mate_method_names[] = {
-  "/User2..mate/hello",
-  "/User2..mate/bye",
+static const char* Greeter_method_names[] = {
+  "/helloworld..Greeter/SayHello",
 };
 
-std::unique_ptr< mate::Stub> mate::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
-  std::unique_ptr< mate::Stub> stub(new mate::Stub(channel));
+std::unique_ptr< Greeter::Stub> Greeter::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
+  std::unique_ptr< Greeter::Stub> stub(new Greeter::Stub(channel));
   return stub;
 }
 
-mate::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel)
-  : channel_(channel)  , rpcmethod_hello_(mate_method_names[0], ::grpc::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_bye_(mate_method_names[1], ::grpc::RpcMethod::NORMAL_RPC, channel)
+Greeter::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel)
+  : channel_(channel)  , rpcmethod_SayHello_(Greeter_method_names[0], ::grpc::RpcMethod::NORMAL_RPC, channel)
   {}
   
-::grpc::Status mate::Stub::hello(::grpc::ClientContext* context, const flatbuffers::BufferRef<logins>& request, flatbuffers::BufferRef<login>* response) {
-  return ::grpc::BlockingUnaryCall(channel_.get(), rpcmethod_hello_, context, request, response);
+::grpc::Status Greeter::Stub::SayHello(::grpc::ClientContext* context, const flatbuffers::BufferRef<HelloRequest>& request, flatbuffers::BufferRef<HelloReply>* response) {
+  return ::grpc::BlockingUnaryCall(channel_.get(), rpcmethod_SayHello_, context, request, response);
 }
 
-::grpc::ClientAsyncResponseReader< flatbuffers::BufferRef<login>>* mate::Stub::AsynchelloRaw(::grpc::ClientContext* context, const flatbuffers::BufferRef<logins>& request, ::grpc::CompletionQueue* cq) {
-  return new ::grpc::ClientAsyncResponseReader< flatbuffers::BufferRef<login>>(channel_.get(), cq, rpcmethod_hello_, context, request);
+::grpc::ClientAsyncResponseReader< flatbuffers::BufferRef<HelloReply>>* Greeter::Stub::AsyncSayHelloRaw(::grpc::ClientContext* context, const flatbuffers::BufferRef<HelloRequest>& request, ::grpc::CompletionQueue* cq) {
+  return new ::grpc::ClientAsyncResponseReader< flatbuffers::BufferRef<HelloReply>>(channel_.get(), cq, rpcmethod_SayHello_, context, request);
 }
 
-::grpc::Status mate::Stub::bye(::grpc::ClientContext* context, const flatbuffers::BufferRef<logins>& request, flatbuffers::BufferRef<login>* response) {
-  return ::grpc::BlockingUnaryCall(channel_.get(), rpcmethod_bye_, context, request, response);
-}
-
-::grpc::ClientAsyncResponseReader< flatbuffers::BufferRef<login>>* mate::Stub::AsyncbyeRaw(::grpc::ClientContext* context, const flatbuffers::BufferRef<logins>& request, ::grpc::CompletionQueue* cq) {
-  return new ::grpc::ClientAsyncResponseReader< flatbuffers::BufferRef<login>>(channel_.get(), cq, rpcmethod_bye_, context, request);
-}
-
-mate::Service::Service() {
-  (void)mate_method_names;
+Greeter::Service::Service() {
+  (void)Greeter_method_names;
   AddMethod(new ::grpc::RpcServiceMethod(
-      mate_method_names[0],
+      Greeter_method_names[0],
       ::grpc::RpcMethod::NORMAL_RPC,
-      new ::grpc::RpcMethodHandler< mate::Service, flatbuffers::BufferRef<logins>, flatbuffers::BufferRef<login>>(
-          std::mem_fn(&mate::Service::hello), this)));
-  AddMethod(new ::grpc::RpcServiceMethod(
-      mate_method_names[1],
-      ::grpc::RpcMethod::NORMAL_RPC,
-      new ::grpc::RpcMethodHandler< mate::Service, flatbuffers::BufferRef<logins>, flatbuffers::BufferRef<login>>(
-          std::mem_fn(&mate::Service::bye), this)));
+      new ::grpc::RpcMethodHandler< Greeter::Service, flatbuffers::BufferRef<HelloRequest>, flatbuffers::BufferRef<HelloReply>>(
+          std::mem_fn(&Greeter::Service::SayHello), this)));
 }
 
-mate::Service::~Service() {
+Greeter::Service::~Service() {
 }
 
-::grpc::Status mate::Service::hello(::grpc::ServerContext* context, const flatbuffers::BufferRef<logins>* request, flatbuffers::BufferRef<login>* response) {
-  (void) context;
-  (void) request;
-  (void) response;
-  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-}
-
-::grpc::Status mate::Service::bye(::grpc::ServerContext* context, const flatbuffers::BufferRef<logins>* request, flatbuffers::BufferRef<login>* response) {
+::grpc::Status Greeter::Service::SayHello(::grpc::ServerContext* context, const flatbuffers::BufferRef<HelloRequest>* request, flatbuffers::BufferRef<HelloReply>* response) {
   (void) context;
   (void) request;
   (void) response;
@@ -79,46 +57,5 @@ mate::Service::~Service() {
 }
 
 
-static const char* mate_method_names[] = {
-  "/User2..mate/yo",
-};
-
-std::unique_ptr< mate::Stub> mate::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
-  std::unique_ptr< mate::Stub> stub(new mate::Stub(channel));
-  return stub;
-}
-
-mate::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel)
-  : channel_(channel)  , rpcmethod_yo_(mate_method_names[0], ::grpc::RpcMethod::NORMAL_RPC, channel)
-  {}
-  
-::grpc::Status mate::Stub::yo(::grpc::ClientContext* context, const flatbuffers::BufferRef<lol>& request, flatbuffers::BufferRef<lol>* response) {
-  return ::grpc::BlockingUnaryCall(channel_.get(), rpcmethod_yo_, context, request, response);
-}
-
-::grpc::ClientAsyncResponseReader< flatbuffers::BufferRef<lol>>* mate::Stub::AsyncyoRaw(::grpc::ClientContext* context, const flatbuffers::BufferRef<lol>& request, ::grpc::CompletionQueue* cq) {
-  return new ::grpc::ClientAsyncResponseReader< flatbuffers::BufferRef<lol>>(channel_.get(), cq, rpcmethod_yo_, context, request);
-}
-
-mate::Service::Service() {
-  (void)mate_method_names;
-  AddMethod(new ::grpc::RpcServiceMethod(
-      mate_method_names[0],
-      ::grpc::RpcMethod::NORMAL_RPC,
-      new ::grpc::RpcMethodHandler< mate::Service, flatbuffers::BufferRef<lol>, flatbuffers::BufferRef<lol>>(
-          std::mem_fn(&mate::Service::yo), this)));
-}
-
-mate::Service::~Service() {
-}
-
-::grpc::Status mate::Service::yo(::grpc::ServerContext* context, const flatbuffers::BufferRef<lol>* request, flatbuffers::BufferRef<lol>* response) {
-  (void) context;
-  (void) request;
-  (void) response;
-  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-}
-
-
-}  // namespace User2
+}  // namespace helloworld
 

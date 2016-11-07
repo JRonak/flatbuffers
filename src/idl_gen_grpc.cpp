@@ -21,6 +21,7 @@
 #include "flatbuffers/util.h"
 #include <iostream>
 #include "src/compiler/cpp_generator.h"
+#include "src/compiler/go_generator.h"
 
 namespace flatbuffers {
 
@@ -41,7 +42,6 @@ public:
   }
 
   std::string name() const {
-    std::cout << method_->name << "\n";
     return method_->name;
   }
 
@@ -144,7 +144,6 @@ public:
   FlatBufFile &operator=(const FlatBufFile &);
 
   std::string filename() const {
-    std::cout << "filename=" << file_name_ << "\n";
     return file_name_;
   }
   std::string filename_without_ext() const {
@@ -155,15 +154,10 @@ public:
   std::string service_header_ext() const { return ".grpc.fb.h"; }
 
   std::string package() const {
-    std::cout << "package=" << StripExtension(parser_.namespaces_.back()->GetFullyQualifiedName(""))
-              << "\n";
     return parser_.namespaces_.back()->GetFullyQualifiedName("");
   }
 
   std::vector<std::string> package_parts() const {
-    auto &x = parser_.namespaces_.back()->components;
-    for (auto i = x.begin(); i != x.end(); i++)
-      std::cout << "components:" << *i << "\n";
     return parser_.namespaces_.back()->components;
   }
 
@@ -212,15 +206,11 @@ public:
     return method_->name;
   }
 
-  std::string GRPCType(const StructDef &sd) const {
-    return sd.name;
-  }
-
   std::string input_type_name() const {
-    return GRPCType(*method_->request);
+    return (*method_->request).name;
   }
   std::string output_type_name() const {
-    return GRPCType(*method_->response);
+    return (*method_->response).name;
   }
 
   bool NoStreaming() const { return streaming_ == kNone; }
@@ -327,7 +317,7 @@ public:
 
   //un-used
   std::string additional_headers() const {
-    return "";
+    return "import \"github.com/google/flatbuffers/go\"";
   }
 
   //un-used
@@ -369,7 +359,11 @@ bool GenerateGRPC(const Parser &parser,
   // TODO(wvo): make the other parameters in this struct configurable.
   generator_parameters.use_system_headers = true;
 
+  grpc_go::FlatBufFile goFile(parser, file_name);
   grpc_cpp::FlatBufFile fbfile(parser, file_name);
+
+  std::cout<<grpc_go_generator::GenerateServiceSource(&goFile,(grpc_go_generator::Codec *)NULL);
+
   std::string header_code =
     grpc_cpp_generator::GetHeaderPrologue(&fbfile, generator_parameters) +
     grpc_cpp_generator::GetHeaderIncludes(&fbfile, generator_parameters) +
