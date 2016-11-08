@@ -83,7 +83,7 @@ void GenerateServerMethodSignature(const grpc_generator::Method *method, grpc_ge
                                    std::map<grpc::string, grpc::string> vars) {
 	vars["Method"] = exportName(method->name());
 	vars["Request"] = method->input_type_name();
-	vars["Response"] = method->output_type_name();
+	vars["Response"] = (vars["CustomMethodInput"] == "") ? method->output_type_name() : vars["CustomMethodInput"];
 	if (method->NoStreaming()) {
 		printer->Print(vars, "$Method$($context$.Context, *$Request$) (*$Response$, error)");
 	} else if (method->ServerOnlyStreaming()) {
@@ -97,7 +97,7 @@ void GenerateServerMethod(const grpc_generator::Method *method, grpc_generator::
                           std::map<grpc::string, grpc::string> vars) {
 	vars["Method"] = exportName(method->name());
 	vars["Request"] = method->input_type_name();
-	vars["Response"] = method->output_type_name();
+	vars["Response"] = (vars["CustomMethodInput"] == "") ? method->output_type_name() : vars["CustomMethodInput"];
 	vars["FullMethodName"] = "/" + vars["Package"] + "." + vars["Service"] + "/" + vars["Method"];
 	vars["Handler"] = "_" + vars["Service"] + "_" + vars["Method"] + "_Handler";
 	if (method->NoStreaming()) {
@@ -135,9 +135,9 @@ void GenerateServerMethod(const grpc_generator::Method *method, grpc_generator::
 	printer->Outdent();
 	printer->Print("}\n\n");
 
-	bool genSend = method->BidiStreaming() || method->ClientOnlyStreaming();
-	bool genRecv = method->BidiStreaming() || method->ServerOnlyStreaming();
-	bool genSendRcv = method->ClientOnlyStreaming();
+	bool genSend = method->BidiStreaming() || method->ServerOnlyStreaming();
+	bool genRecv = method->BidiStreaming() || method->ClientOnlyStreaming();
+	bool genSendAndClose = method->ClientOnlyStreaming();
 
 	printer->Print(vars, "type $Service$_$Method$Server interface{ \n");
 	printer->Indent();
@@ -147,7 +147,7 @@ void GenerateServerMethod(const grpc_generator::Method *method, grpc_generator::
 	if (genRecv) {
 		printer->Print(vars, "Recv() (* $Request$, error)\n");
 	}
-	if (genSendRcv) {
+	if (genSendAndClose) {
 		printer->Print(vars, "SendAndClose(* $Response$) error\n");
 	}
 	printer->Print(vars, "$grpc$.ServerStream\n");
@@ -176,7 +176,7 @@ void GenerateServerMethod(const grpc_generator::Method *method, grpc_generator::
 		printer->Outdent();
 		printer->Print("}\n\n");
 	}
-	if (genSendRcv) {
+	if (genSendAndClose) {
 		printer->Print(vars, "func (x *$StreamType$) SendAndClose(m *$Response$) error{\n");
 		printer->Indent();
 		printer->Print("return x.ServerStream.SendMsg(m)\n");
@@ -190,7 +190,7 @@ void GenerateServerMethod(const grpc_generator::Method *method, grpc_generator::
 void GenerateClientMethodSignature(const grpc_generator::Method *method, grpc_generator::Printer *printer,
                                    std::map<grpc::string, grpc::string> vars) {
 	vars["Method"] = exportName(method->name());
-	vars["Request"] = ", in *" + method->input_type_name();
+	vars["Request"] = ", in *" +((vars["CustomMethodInput"] == "") ? method->input_type_name() : vars["CustomMethodInput"]);
 	if (method->ClientOnlyStreaming() || method->BidiStreaming()) {
 		vars["Request"] = "";
 	}
@@ -209,13 +209,9 @@ void GenerateClientMethod(const grpc_generator::Method *method, grpc_generator::
 	printer->Print("{\n");
 	printer->Indent();
 	vars["Method"] = exportName(method->name());
-	vars["Request"] = method->input_type_name();
+	vars["Request"] = (vars["CustomMethodInput"] == "") ? method->input_type_name() : vars["CustomMethodInput"];
 	vars["Response"] = method->output_type_name();
 	vars["FullMethodName"] = "/" + vars["Package"] + "." + vars["Service"] + "/" + vars["Method"];
-	//adding custom codec
-	if (vars["Codec"] != "") {
-		printer->Print(vars, "opts = append(opts, $grpc$.WithCodec($Codec$)\n");
-	}
 	if (method->NoStreaming()) {
 		printer->Print(vars, "out := new($Response$)\n");
 		printer->Print(vars, "err := $grpc$.Invoke(ctx, \"$FullMethodName$\", in, out, c.cc, opts...)\n");
@@ -240,7 +236,7 @@ void GenerateClientMethod(const grpc_generator::Method *method, grpc_generator::
 
 	bool genSend = method->BidiStreaming() || method->ClientOnlyStreaming();
 	bool genRecv = method->BidiStreaming() || method->ServerOnlyStreaming();
-	bool genSendRcv = method->ClientOnlyStreaming();
+	bool genCloseAndRecv = method->ClientOnlyStreaming();
 
 	//Stream interface
 	printer->Print(vars, "type $Service$_$Method$Client interface{\n");
@@ -251,8 +247,8 @@ void GenerateClientMethod(const grpc_generator::Method *method, grpc_generator::
 	if (genRecv) {
 		printer->Print(vars, "Recv() (*$Response$, error)\n");
 	}
-	if (genSendRcv) {
-		printer->Print(vars, "SendAndClose() (*$Response$, error)\n");
+	if (genCloseAndRecv) {
+		printer->Print(vars, "CloseAndRecv() (*$Response$, error)\n");
 	}
 	printer->Print(vars, "$grpc$.ClientStream\n");
 	printer->Outdent();
@@ -283,8 +279,8 @@ void GenerateClientMethod(const grpc_generator::Method *method, grpc_generator::
 		printer->Print("}\n\n");
 	}
 
-	if (genSendRcv) {
-		printer->Print(vars, "func (x *$StreamType$) SendAndClose() (* $Response$, error){\n");
+	if (genCloseAndRecv) {
+		printer->Print(vars, "func (x *$StreamType$) CloseAndRecv() (* $Response$, error){\n");
 		printer->Indent();
 		printer->Print("if err := x.ClientStream.CloseSend(); err != nil { return nil, err }\n");
 		printer->Print(vars, "m := new ($Response$)\n");
@@ -417,7 +413,7 @@ void GenerateService(const grpc_generator::Service *service, grpc_generator::Pri
 
 
 // Returns source for the service
-grpc::string GenerateServiceSource(grpc_generator::File *file, grpc_go_generator::Codec *codec) {
+grpc::string GenerateServiceSource(grpc_generator::File *file, grpc_go_generator::Parameters *parameters) {
 	grpc::string out;
 	auto p = file->CreatePrinter(&out);
 	auto printer = p.get();
@@ -426,9 +422,9 @@ grpc::string GenerateServiceSource(grpc_generator::File *file, grpc_go_generator
 	vars["grpc"] = "grpc";
 	vars["context"] = "context";
 	GenerateImports(file, printer, vars);
-	if (codec) {
-		printer->Print(codec->source.c_str());
-		vars["Codec"] = codec->name;
+	if (parameters) {
+		printer->Print(parameters->custom_codec_source.c_str());
+		vars["CustomMethodInput"] = parameters->custom_method_input;
 	}
 	for (int i = 0; i < file->service_count(); i++) {
 		auto service = file->service(i);

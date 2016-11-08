@@ -1,13 +1,16 @@
-namespace helloworld;
+namespace SimpleMath;
 
-table HelloRequest{
-	name: string;
+table NumReq{
+	num: int;
 }
 
-table HelloReply{
-	name: string;
+table NumRes{
+	num: int;
 }
 
-rpc_service Greeter{
-	SayHello(HelloRequest):HelloReply;
+rpc_service Math{
+	Mod2(NumReq):NumRes (streaming: "none");
+	AddNumbers(NumReq):NumRes (streaming: "client");
+	Squares(NumReq): NumRes (streaming: "server");
+	IsOdd(NumReq): NumRes (streaming: "bidi");
 }

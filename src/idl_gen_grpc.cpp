@@ -183,6 +183,34 @@ private:
   const Parser &parser_;
   const std::string &file_name_;
 };
+
+bool GenerateCppGRPC(const Parser &parser,
+                     const std::string &/*path*/,
+                     const std::string &file_name) {
+
+  grpc_cpp_generator::Parameters generator_parameters;
+  // TODO(wvo): make the other parameters in this struct configurable.
+  generator_parameters.use_system_headers = true;
+  grpc_cpp::FlatBufFile fbfile(parser, file_name);
+
+  std::string header_code =
+    grpc_cpp_generator::GetHeaderPrologue(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetHeaderIncludes(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetHeaderServices(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetHeaderEpilogue(&fbfile, generator_parameters);
+
+  std::string source_code =
+    grpc_cpp_generator::GetSourcePrologue(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetSourceIncludes(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetSourceServices(&fbfile, generator_parameters) +
+    grpc_cpp_generator::GetSourceEpilogue(&fbfile, generator_parameters);
+
+  return flatbuffers::SaveFile((file_name + ".grpc.fb.h").c_str(),
+                               header_code, false) &&
+         flatbuffers::SaveFile((file_name + ".grpc.fb.cc").c_str(),
+                               source_code, false);
+}
+
 }// namespace grpc_cpp
 
 namespace grpc_go {
@@ -342,6 +370,47 @@ private:
   const Parser &parser_;
   const std::string &file_name_;
 };
+
+std::string GetCodec() {
+  std::string codec;
+  auto printer = std::unique_ptr<FlatBufPrinter>(new FlatBufPrinter(&codec));
+  printer->Print("// FlatCodec implements Grpc-go Codec\n\n");
+  printer->Print("type FlatCodec struct{}\n\n");
+  printer->Print("func (FlatCodec) Marshal(v interface{}) ([]byte, error) {\n");
+  printer->Indent();
+  printer->Print("return v.(*flatbuffers.Builder).FinishedBytes(), nil\n");
+  printer->Outdent();
+  printer->Print("}\n\n");
+  printer->Print("func (FlatCodec) Unmarshal(data []byte, v interface{}) error {\n");
+  printer->Indent();
+  printer->Print("v.(flatbuffersInit).Init(data, flatbuffers.GetUOffsetT(data))\n");
+  printer->Print("return nil\n");
+  printer->Outdent();
+  printer->Print("}\n\n");
+  printer->Print("func (FlatCodec) String() string {\n");
+  printer->Indent();
+  printer->Print("return \"flatbuffers\"");
+  printer->Outdent();
+  printer->Print("}\n\n");
+  printer->Print("type flatbuffersInit interface {\n");
+  printer->Indent();
+  printer->Print("Init(data []byte, i flatbuffers.UOffsetT)\n");
+  printer->Outdent();
+  printer->Print("}\n\n");
+  return codec;
+}
+
+bool GenerateGoGRPC(const Parser &parser,
+                    const std::string &file_name) {
+
+  FlatBufFile goFile(parser, file_name);
+  grpc_go_generator::Parameters p;
+  p.custom_codec_source = GetCodec();
+  p.custom_method_input = "flatbuffers.Builder";
+  std::string output = grpc_go_generator::GenerateServiceSource(&goFile, &p);
+  return flatbuffers::SaveFile((goFile.package() +"/" "grpc.go").c_str(),output, false);
+}
+
 }//namespace grpc_go
 
 bool GenerateGRPC(const Parser &parser,
@@ -354,32 +423,7 @@ bool GenerateGRPC(const Parser &parser,
     if (!(*it)->generated) nservices++;
   }
   if (!nservices) return true;
-
-  grpc_cpp_generator::Parameters generator_parameters;
-  // TODO(wvo): make the other parameters in this struct configurable.
-  generator_parameters.use_system_headers = true;
-
-  grpc_go::FlatBufFile goFile(parser, file_name);
-  grpc_cpp::FlatBufFile fbfile(parser, file_name);
-
-  std::cout<<grpc_go_generator::GenerateServiceSource(&goFile,(grpc_go_generator::Codec *)NULL);
-
-  std::string header_code =
-    grpc_cpp_generator::GetHeaderPrologue(&fbfile, generator_parameters) +
-    grpc_cpp_generator::GetHeaderIncludes(&fbfile, generator_parameters) +
-    grpc_cpp_generator::GetHeaderServices(&fbfile, generator_parameters) +
-    grpc_cpp_generator::GetHeaderEpilogue(&fbfile, generator_parameters);
-
-  std::string source_code =
-    grpc_cpp_generator::GetSourcePrologue(&fbfile, generator_parameters) +
-    grpc_cpp_generator::GetSourceIncludes(&fbfile, generator_parameters) +
-    grpc_cpp_generator::GetSourceServices(&fbfile, generator_parameters) +
-    grpc_cpp_generator::GetSourceEpilogue(&fbfile, generator_parameters);
-
-  return flatbuffers::SaveFile((file_name + ".grpc.fb.h").c_str(),
-                               header_code, false) &&
-         flatbuffers::SaveFile((file_name + ".grpc.fb.cc").c_str(),
-                               source_code, false);
+  return grpc_go::GenerateGoGRPC(parser, file_name);
 }
 
 }  // namespace flatbuffers
